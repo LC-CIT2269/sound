@@ -39,7 +39,6 @@ export default class App extends Component {
 	console.log('Loading Local Sound after mount');
 	await Audio.setAudioModeAsync({ playInSilentModeIOS: true });
 	  await this.loadLocalSound();
-	  //await this.loadLocalUri();
 	  await this.loadRemoteSound('https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3')
   }
   
@@ -51,7 +50,6 @@ export default class App extends Component {
 	}
 
 	loadLocalUri = async (source) => {
-		// let someUri = 'file://data/user/0/host.exp.exponent/cache/ExperienceData/%2540stephengraham%252Fsound/Audio/recording-538949e9-8230-4b0d-890b-c11bfb890002.m4a'
 		const { sound } = await Audio.Sound.createAsync({
 			uri: source,
 		})
