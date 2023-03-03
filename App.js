@@ -5,12 +5,18 @@
 \brief	Sample sound effect player
 		https://snack.expo.dev/@kartikeyvaish/remote-and-local-sounds
 		https://morioh.com/p/ed71cad8a8c9
+		https://docs.expo.dev/versions/latest/sdk/av/
+		https://docs.expo.dev/versions/latest/sdk/audio/
 		
 **/
 import React, { Component } from 'react';
 import { Text, View, StyleSheet, Button } from 'react-native';
 import { Audio } from 'expo-av';
 
+/**
+ * class App
+ * This is the main App for the example sound effect player
+ **/
 export default class App extends Component {
   constructor(props){
 	  super(props);
@@ -23,63 +29,113 @@ export default class App extends Component {
 	  }
   }
   // state handlers
-  setLocalSound(newPbo){
+	// superceded by setSound
+	setLocalSound(newPbo){
 		this.setState({
 			localSound: newPbo,
 		});
-  }
-  setRemoteSound(newPbo){
+	}
+
+	// superceded by setSound
+	setRemoteSound(newPbo) {
 		this.setState({ 
 			remoteSound: newPbo
 		});
-  }
-
-  
-  async componentDidMount(){
-	console.log('Loading Local Sound after mount');
-	await Audio.setAudioModeAsync({ playInSilentModeIOS: true });
-	  await this.loadLocalSound();
-	  await this.loadRemoteSound('https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3')
-  }
-  
-	async loadLocalSound(source){
-		const { sound } = await Audio.Sound.createAsync(
-			require("./assets/sfx/sound3.mp3")
-		);
-		this.setLocalSound(sound);
 	}
 
-	loadLocalUri = async (source) => {
-		const { sound } = await Audio.Sound.createAsync({
-			uri: source,
-		})
-		this.setLocalSound(sound);
-	}
-
-	loadRemoteSound = async (source) => {
-		const { sound } = await Audio.Sound.createAsync(
-			{ uri: source, }
-		);
-		this.setRemoteSound(sound);
+	// This is a generic state setter for my sounds
+	// It will create (or overwrite) a pbo, and a related Playing and Paused flag
+	// param   pboName    - string value that will be the root key for the pbo
+	// param   pbo        - Audio.Sound object for playback
+	setSound = (pboName, pbo) => {
+		updateState = {};
+		updateState[pboName] = pbo;
+		updateState[pboName + "Playing"] = false;
+		updateState[pboName + "Paused"] = false;
+		this.setState(updateState);
     }
-  
-  async componentWillUnmount(){
-	const { localSound, remoteSound } = this.state;
-	if (localSound) {
-		localSound.stopAsync();
-		localSound.unloadAsync();
+
+
+	// This is a general sound loader that will attempt to load a sound and then set the keys for that sound
+	// param id - string for the root key name for the state
+	// param source - string for the uri of the sound. This can be a local or remote uri
+	loadSound = async (id, source) => {
+		if (source && id) {
+			try {
+				const { sound } = await Audio.Sound.createAsync({
+					uri: source,
+				});
+				this.setSound(id, sound);
+			} catch (err) {
+				console.error("Unable to load sound from uri: ", err);
+			}
+		} else {
+			throw ("Missing source or id.");
+		}
 	}
-	  if (remoteSound) {
-		  remoteSound.stopAsync();
-		  remoteSound.unloadAsync();
-      }
-}
+
+	// This function loads a sound from a local, fixed asset using the require(). 
+	loadLocalSound = async (source) => {
+		try {
+			const { sound } = await Audio.Sound.createAsync(
+				require("./assets/sfx/sound3.mp3")
+			);
+			this.setSound("localSound", sound);
+		} catch (err) {
+			console.error("unable to load local sound.");
+		}
+	}
+
+	// This is a wrapper function that calls this.loadSound to attach the source to a state key "remoteSound"
+	loadRemoteSound = async (source) => {
+		try {
+			console.log("Attempting to load from ", source);
+			await this.loadSound("remoteSound", source);
+		} catch (err) {
+			console.error("Error in 'loadRemoteSound()': ", err);
+		}
+	}
+
+	// component lifecycle functions
+	async componentDidMount(){
+		try {
+			await Audio.setAudioModeAsync({ playInSilentModeIOS: true });
+			await this.loadLocalSound();
+			await this.loadSound('remoteSound', 'https://www.learningcontainer.com/wp-content/uploads/2020/02/Kalimba.mp3')
+		} catch (err) {
+			console.error('Error in componentDidMount(): ', err);
+        }
+	}
+
+	async componentWillUnmount() {
+		const { localSound, remoteSound } = this.state;
+		if (localSound) {
+			localSound.stopAsync();
+			localSound.unloadAsync();
+		}
+		if (remoteSound) {
+			remoteSound.stopAsync();
+			remoteSound.unloadAsync();
+		}
+	}
   
-  playLocalSound = async () => {
-	console.log('Playing Sound');
-	const { localSound } = this.state;
-	await localSound.replayAsync();
-  }
+	playLocalSound = async () => {
+		const { localSound } = this.state;
+		try {
+			await localSound.replayAsync();
+		} catch (err) {
+			console.error("Error in playLocalSound(): ", err);
+        }
+	}
+
+	playSoundFromPboKey = async (pboKey) => {
+		const { [pboKey]: localSound } = this.state;
+		try {
+			await localSound.replayAsync();
+		} catch (err) {
+			console.error("Cannot replay this pbo (", pboKey, "): ", err);
+		}
+	}
 
 	playRemoteSound = async () => {
 		const { remoteSound, remoteSoundPaused, remoteSoundPlaying } = this.state;
@@ -140,7 +196,7 @@ export default class App extends Component {
         })
 		console.log('Recording stopped and stored at', uri);
 		try {
-			await this.loadLocalUri(this.state.latestRecording);
+			await this.loadSound("localSound", this.state.latestRecording);
 			console.log('Attached ', uri, ' to the local sound');
 		} catch (err) {
 			console.log('FAILED TO ATTACH ', uri);
@@ -150,7 +206,7 @@ export default class App extends Component {
 	render() {
 		return (
 			<View style={styles.container}>
-				<Button title="Play Local Sound" onPress={this.playLocalSound} />
+				<Button title="Play Local Sound" onPress={()=>this.playSoundFromPboKey("localSound")} />
 				<Button
 					title={this.state.remoteSoundPlaying ? "Stop Remote Sound" : "Play Remote Sound"}
 					onPress={this.playRemoteSound} />
